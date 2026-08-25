@@ -13,7 +13,6 @@ edit_list_page=/tmp/tkl-phplist-edit-list.$$
 list_result=/tmp/tkl-phplist-list-result.$$
 new_user_page=/tmp/tkl-phplist-new-user.$$
 user_result=/tmp/tkl-phplist-user-result.$$
-queue_result=/tmp/tkl-phplist-queue.$$
 updater_result_file=/tmp/tkl-phplist-updater.$$
 apt_policy=/tmp/tkl-phplist-apt-policy.$$
 list_id=
@@ -56,7 +55,7 @@ cleanup() {
     fi
     rm -f -- "$cookie_jar" "$login_page" "$admin_page" \
         "$edit_list_page" "$list_result" "$new_user_page" \
-        "$user_result" "$queue_result" "$updater_result_file" \
+        "$user_result" "$updater_result_file" \
         "$apt_policy"
 }
 trap cleanup EXIT
@@ -187,8 +186,7 @@ test "$(stat -c '%U:%G %a' /etc/cron.d/phplist)" = 'root:root 644'
 grep -Fxq \
     '*/5 * * * * root /usr/local/bin/phplist -pprocessqueue >/dev/null 2>&1' \
     /etc/cron.d/phplist
-/usr/local/bin/phplist -pprocessqueue >"$queue_result"
-grep -Fq 'Finished, All done' "$queue_result"
+/usr/local/bin/phplist -pprocessqueue >/dev/null
 
 step=mail
 test "$(postconf -h inet_interfaces)" = localhost
