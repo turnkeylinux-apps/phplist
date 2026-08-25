@@ -112,6 +112,9 @@ DATA="firstinstall=1&page=initialise&adminname=admin&orgname=TurnKey+Linux&admin
 $CURL -d $DATA $URL
 rm -f /tmp/phplist-install-cookie
 
+# set default ckeditor path while the database is still running
+$MYSQL_BATCH --execute "INSERT INTO phplist.config (item, value, editable, type) VALUES ('kcfinder_path', 'plugins/CKEditorPlugin/kcfinder','1',NULL)"
+
 # set default password for good measure
 /usr/lib/inithooks/bin/phplist.py --email=$ADMIN_MAIL --pass=$ADMIN_PASS --domain=$DOMAIN
 
@@ -124,9 +127,6 @@ NEW_HTML="\$html\[\"signature\"\] = \'<div style=\"clear: both; font-family: ari
 
 sed -i "s|$OLD_TEXT|$NEW_TEXT|" $WEBROOT/admin/sendemaillib.php
 sed -i "s|$OLD_HTML|$NEW_HTML|" $WEBROOT/admin/sendemaillib.php
-
-# set default ckeditor path correctly
-$MYSQL_BATCH --execute "INSERT INTO phplist.config (item, value, editable, type) VALUES ('kcfinder_path', 'plugins/CKEditorPlugin/kcfinder','1',NULL)"
 
 # stop services
 service mysql stop
