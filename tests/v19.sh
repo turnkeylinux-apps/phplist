@@ -21,6 +21,9 @@ subscriber_id=
 list_name=TurnKey-v19-list-$$
 subscriber_email=turnkey-v19-$$@example.test
 mail_subject="TurnKey phpList v19 mail $$"
+step=startup
+
+trap 'rc=$?; printf "phplist-v19-test-failure step=%s line=%s status=%s\n" "$step" "$LINENO" "$rc" >&2; exit "$rc"' ERR
 
 database() {
     mariadb --batch --skip-column-names --user=root \
@@ -58,11 +61,13 @@ cleanup() {
 }
 trap cleanup EXIT
 
+step=service-state
 systemctl --quiet is-active apache2.service mariadb.service postfix.service \
     cron.service multi-user.target
 systemctl --quiet is-enabled apache2.service mariadb.service postfix.service \
     cron.service
 
+step=application-version
 installed=$(php -r '
     $source = file_get_contents($argv[1]);
     preg_match("/define\\(\"VERSION\",\"([^\"]+)\"\\)/", $source, $match);
@@ -78,6 +83,7 @@ installed_digest=$(awk -v archive="phplist-$installed.zip" \
 test "$installed_digest" = \
     0b1c2eae6a7fd617d18438d97d47714b4cbfdf3e6b2abab8a154e17d28ec89de
 
+step=packages-and-modules
 php_package=$(dpkg-query -W -f='${Version}' php)
 mariadb_package=$(dpkg-query -W -f='${Version}' mariadb-server)
 apache_package=$(dpkg-query -W -f='${Version}' apache2)
@@ -89,6 +95,7 @@ for module in curl gd gettext json mbstring mysqli openssl simplexml xml zip; do
 done
 dpkg-query -W webmin-apache webmin-mysql >/dev/null
 
+step=administrator-login
 curl --insecure --fail --silent --show-error "$base/" >"$list_result"
 grep -qi 'phpList' "$list_result"
 curl --insecure --fail --silent --show-error \
@@ -105,6 +112,7 @@ grep -Fq 'id="logout"' "$admin_page"
 grep -Fq '>Dashboard<' "$admin_page"
 session_token=$(html_value "$admin_page" 'tk=([0-9a-f]{32})')
 
+step=list-roundtrip
 curl --insecure --fail --silent --show-error \
     --cookie "$cookie_jar" --cookie-jar "$cookie_jar" \
     "$base/admin/?page=editlist&tk=$session_token" >"$edit_list_page"
@@ -129,6 +137,7 @@ curl --insecure --fail --silent --show-error \
 grep -Fq "$list_name" "$list_result"
 grep -Fq 'TurnKey v19 disposable list' "$list_result"
 
+step=subscriber-roundtrip
 curl --insecure --fail --silent --show-error \
     --cookie "$cookie_jar" --cookie-jar "$cookie_jar" \
     "$base/admin/?page=user&tk=$session_token" >"$new_user_page"
@@ -172,6 +181,7 @@ database --execute \
     "SELECT CONCAT(u.email, '|', u.confirmed, '|', l.name) FROM user u JOIN listuser lu ON lu.userid=u.id JOIN list l ON l.id=lu.listid WHERE u.id=$subscriber_id AND l.id=$list_id;" |
     grep -Fxq "$subscriber_email|1|$list_name"
 
+step=scheduler
 test "$(stat -c '%U:%G %a' /etc/cron.d/phplist)" = 'root:root 644'
 grep -Fxq \
     '*/5 * * * * root /usr/local/bin/phplist -pprocessqueue >/dev/null 2>&1' \
@@ -179,6 +189,7 @@ grep -Fxq \
 /usr/local/bin/phplist -pprocessqueue >"$queue_result"
 grep -Fq 'Finished, All done' "$queue_result"
 
+step=mail
 test "$(postconf -h inet_interfaces)" = localhost
 printf 'From: acceptance@localhost\r\nTo: root@localhost\r\nSubject: %s\r\n\r\nmail-ok\r\n' \
     "$mail_subject" |
@@ -191,11 +202,13 @@ for _ in 1 2 3 4 5; do
 done
 grep -Fq "$mail_subject" /var/mail/root
 
+step=management-endpoints
 curl --insecure --fail --silent --show-error --head \
     https://127.0.0.1:12321/ >/dev/null
 curl --insecure --fail --silent --show-error --head \
     https://127.0.0.1:12322/ >/dev/null
 
+step=updater
 code_before=$(sha256sum /var/www/phplist/admin/init.php \
     /var/www/phplist/config/config.php)
 /usr/local/sbin/turnkey-phplist-update --check >"$updater_result_file"
@@ -212,6 +225,7 @@ status=$(sed -n 's/^status=//p' "$updater_result_file")
 [[ $status == up-to-date || $status == update-available ]]
 dpkg --compare-versions "$available" ge "$installed"
 
+step=apt
 before="$php_package|$mariadb_package|$apache_package|$postfix_package|$cron_package"
 apt-get update >/dev/null
 for package in php mariadb-server apache2 postfix cron; do
@@ -226,6 +240,7 @@ test "$after" = "$before"
 grep -Rqs '^Suites: trixie' /etc/apt/sources.list.d
 ! grep -Rqi bookworm /etc/apt/sources.list.d
 
+step=result
 cat >"$result" <<EOF
 package_source=Official phpList $installed SourceForge release; Debian Trixie APT packages for PHP, MariaDB, Apache, Postfix and cron; TurnKey APT packages for Webmin and Adminer
 installed_version=phpList $installed; php $php_package; mariadb-server $mariadb_package; apache2 $apache_package; postfix $postfix_package; cron $cron_package
