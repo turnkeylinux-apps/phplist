@@ -84,7 +84,7 @@ test "$installed_digest" = \
     0b1c2eae6a7fd617d18438d97d47714b4cbfdf3e6b2abab8a154e17d28ec89de
 
 step=packages-and-modules
-php_package=$(dpkg-query -W -f='${Version}' php)
+php_package=$(dpkg-query -W -f='${Version}' php8.4-cli)
 mariadb_package=$(dpkg-query -W -f='${Version}' mariadb-server)
 apache_package=$(dpkg-query -W -f='${Version}' apache2)
 postfix_package=$(dpkg-query -W -f='${Version}' postfix)
