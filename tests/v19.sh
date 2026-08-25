@@ -62,10 +62,11 @@ cleanup() {
 trap cleanup EXIT
 
 step=service-state
-systemctl --quiet is-active apache2.service mariadb.service postfix.service \
-    cron.service multi-user.target
-systemctl --quiet is-enabled apache2.service mariadb.service postfix.service \
-    cron.service
+for unit in apache2.service mariadb.service postfix.service cron.service; do
+    systemctl --quiet is-active "$unit"
+    systemctl --quiet is-enabled "$unit"
+done
+systemctl --quiet is-active multi-user.target
 
 step=application-version
 installed=$(php -r '
