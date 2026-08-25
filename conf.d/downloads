@@ -12,10 +12,10 @@ if [ -n "${FAB_HTTP_PROXY:-}" ]; then
 fi
 
 cd /usr/local/src
-curl --fail --location --show-error \
+curl --fail --location --silent --show-error \
     --proto '=https' --proto-redir '=https' \
     "${proxy_args[@]}" --output "$ARCHIVE" "$BASE_URL/$ARCHIVE"
-curl --fail --location --show-error \
+curl --fail --location --silent --show-error \
     --proto '=https' --proto-redir '=https' \
     "${proxy_args[@]}" --output "$CHECKSUM" "$BASE_URL/$CHECKSUM"
 
