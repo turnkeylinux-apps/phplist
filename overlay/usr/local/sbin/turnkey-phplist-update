@@ -1,0 +1,134 @@
+#!/bin/bash
+set -Eeuo pipefail
+umask 077
+
+webroot=/var/www/phplist
+metadata=/usr/share/turnkey-phplist
+download_page=https://www.phplist.org/download-phplist/
+sourceforge_root=https://downloads.sourceforge.net/project/phplist/phplist
+mode=${1:---check}
+tmp_dir=
+apache_stopped=false
+
+usage() {
+    echo "Usage: $0 [--check|--apply]" >&2
+    exit 2
+}
+
+cleanup() {
+    if $apache_stopped; then
+        systemctl start apache2.service >/dev/null 2>&1 || true
+    fi
+    if [[ -n $tmp_dir && -d $tmp_dir ]]; then
+        rm -rf -- "$tmp_dir"
+    fi
+}
+trap cleanup EXIT
+
+case "$mode" in
+    --check|--apply) ;;
+    *) usage ;;
+esac
+
+installed=$(php -r '
+    $source = file_get_contents($argv[1]);
+    if (!preg_match("/define\\(\"VERSION\",\"([^\"]+)\"\\)/", $source, $match)) {
+        exit(1);
+    }
+    echo $match[1];
+' "$webroot/admin/init.php")
+[[ $installed =~ ^[0-9]+(\.[0-9]+)+$ ]]
+
+tmp_dir=$(mktemp -d /var/tmp/turnkey-phplist-update.XXXXXX)
+curl --fail --location --silent --show-error \
+    --proto '=https' --proto-redir '=https' \
+    --output "$tmp_dir/download.html" "$download_page"
+latest=$(sed -nE \
+    's|.*sourceforge.net/projects/phplist/files/phplist/([0-9]+(\.[0-9]+)+)/phplist-[0-9.]+\.zip/download.*|\1|p' \
+    "$tmp_dir/download.html" | head -n 1)
+[[ $latest =~ ^[0-9]+(\.[0-9]+)+$ ]]
+
+archive=phplist-$latest.zip
+checksum=phplist-$latest.sha256
+release_url=$sourceforge_root/$latest
+curl --fail --location --silent --show-error \
+    --proto '=https' --proto-redir '=https' \
+    --output "$tmp_dir/$archive" "$release_url/$archive"
+curl --fail --location --silent --show-error \
+    --proto '=https' --proto-redir '=https' \
+    --output "$tmp_dir/$checksum" "$release_url/$checksum"
+
+published=$(awk -v archive="$archive" '$2 == archive { print $1 }' \
+    "$tmp_dir/$checksum")
+[[ $published =~ ^[0-9a-f]{64}$ ]]
+printf '%s  %s\n' "$published" "$tmp_dir/$archive" | sha256sum --check - \
+    >/dev/null
+archive_version=$(unzip -p "$tmp_dir/$archive" "phplist-$latest/VERSION" |
+    sed -nE 's/^VERSION=([0-9]+(\.[0-9]+)+)$/\1/p')
+test "$archive_version" = "$latest"
+
+echo "installed_version=$installed"
+echo "available_version=$latest"
+echo "updater_channel=phpList official stable"
+echo "artifact_sha256=$published"
+
+if dpkg --compare-versions "$latest" le "$installed"; then
+    echo "status=up-to-date"
+    exit 0
+fi
+
+echo "status=update-available"
+if [[ $mode == --check ]]; then
+    exit 0
+fi
+
+test "$(id -u)" -eq 0
+backup_dir=/var/backups/phplist
+install -d -m 0700 "$backup_dir"
+stamp=$(date -u +%Y%m%dT%H%M%SZ)
+code_backup=$backup_dir/phplist-code-$installed-$stamp.tar.gz
+database_backup=$backup_dir/phplist-database-$installed-$stamp.sql
+
+mapfile -d '' -t database < <(php -r '
+    include $argv[1];
+    foreach ([$database_host, $database_user, $database_password, $database_name] as $value) {
+        echo $value, "\0";
+    }
+' "$webroot/config/config.php")
+test "${#database[@]}" -eq 4
+{
+    echo '[client]'
+    printf 'host=%s\nuser=%s\npassword=%s\n' \
+        "${database[0]}" "${database[1]}" "${database[2]}"
+} >"$tmp_dir/mariadb.cnf"
+
+tar --create --gzip --file "$code_backup" --directory /var/www phplist
+mariadb-dump --defaults-extra-file="$tmp_dir/mariadb.cnf" \
+    --single-transaction --routines --events --triggers \
+    "${database[3]}" >"$database_backup"
+chmod 0600 "$code_backup" "$database_backup"
+
+unzip -q "$tmp_dir/$archive" -d "$tmp_dir/release"
+release_root=$tmp_dir/release/phplist-$latest
+test -f "$release_root/public_html/lists/admin/index.php"
+test -f "$release_root/public_html/lists/config/config_extended.php"
+cp -a "$webroot/config/config.php" "$tmp_dir/config.php"
+
+systemctl stop apache2.service
+apache_stopped=true
+cp -a "$release_root/public_html/lists/." "$webroot/"
+install -m 0640 -o root -g www-data "$tmp_dir/config.php" \
+    "$webroot/config/config.php"
+chown -R root:root "$webroot"
+chown root:www-data "$webroot/config/config.php"
+
+USER=root CONFIG=$webroot/config/config.php \
+    php "$webroot/admin/index.php" -pupgrade
+install -m 0644 "$release_root/VERSION" "$metadata/VERSION"
+install -m 0644 "$tmp_dir/$checksum" "$metadata/release.sha256"
+
+systemctl start apache2.service
+apache_stopped=false
+echo "code_backup=$code_backup"
+echo "database_backup=$database_backup"
+echo "status=updated"

@@ -3,6 +3,7 @@
 DB_NAME=phplist
 DB_USER=phplist
 DB_PASS=$(mcookie)
+VERSION=3.7.0
 
 ADMIN_NAME=admin
 ADMIN_PASS=turnkey
@@ -13,12 +14,21 @@ SRC=/usr/local/src
 WEBROOT=/var/www/phplist
 
 # unpack
-unzip $SRC/phplist-*.zip -d $SRC
-mv $SRC/phplist-*/public_html/lists $WEBROOT
+unzip "$SRC/phplist-$VERSION.zip" -d "$SRC"
+mv "$SRC/phplist-$VERSION/public_html/lists" "$WEBROOT"
 mkdir $WEBROOT/docs
-mv $SRC/phplist-*/README* $WEBROOT/docs/
+cp "$SRC/phplist-$VERSION/README.md" \
+    "$SRC/phplist-$VERSION/UPGRADE" \
+    "$SRC/phplist-$VERSION/VERSION" \
+    "$SRC/phplist-$VERSION/doc/README.commandline" \
+    "$WEBROOT/docs/"
+install -d /usr/share/turnkey-phplist
+install -m 0644 "$SRC/phplist-$VERSION/VERSION" \
+    /usr/share/turnkey-phplist/VERSION
+install -m 0644 "$SRC/phplist-$VERSION.sha256" \
+    /usr/share/turnkey-phplist/release.sha256
 chown -R root:root $WEBROOT
-rm -rf $SRC/phplist-*
+rm -rf "$SRC/phplist-$VERSION"
 
 # create phplist cli
 PHPLIST_CLI=/usr/local/bin/phplist
@@ -82,6 +92,7 @@ cp $WEBROOT/config/config_extended.php $CONFIG
 sed -i "s|^\$database_name.*|\$database_name = \"$DB_NAME\";|" $CONFIG
 sed -i "s|^\$database_user.*|\$database_user = \"$DB_USER\";|" $CONFIG
 sed -i "s|^\$database_password.*|\$database_password = \'$DB_PASS\';|" $CONFIG
+sed -i "s|^\$database_connection_ssl_ca.*|\$database_connection_ssl_ca = null;|" $CONFIG
 sed -i "s|^\$installation_name.*|\$installation_name = \'TurnKey PHPlist\';|" $CONFIG
 sed -i "s|^\$table_prefix.*|\$table_prefix = \"\";|" $CONFIG
 sed -i "s|^\$usertable_prefix.*|\$usertable_prefix = \"\";|" $CONFIG
@@ -96,10 +107,10 @@ sed -i "s|^define('TEST'.*|define ('TEST', 0);|" $CONFIG
 
 # curl based install
 URL="http://127.0.0.1/admin/?page=initialise&firstinstall=1"
-CURL="curl -c /tmp/cookie -b /tmp/cookie"
+CURL="curl --fail --silent --show-error -c /tmp/phplist-install-cookie -b /tmp/phplist-install-cookie"
 DATA="firstinstall=1&page=initialise&adminname=admin&orgname=TurnKey+Linux&adminemail=mail%40example.com&adminpassword=turnkeylinux"
 $CURL -d $DATA $URL
-rm -f /tmp/cookie
+rm -f /tmp/phplist-install-cookie
 
 # set default password for good measure
 /usr/lib/inithooks/bin/phplist.py --email=$ADMIN_MAIL --pass=$ADMIN_PASS --domain=$DOMAIN
@@ -120,4 +131,3 @@ $MYSQL_BATCH --execute "INSERT INTO phplist.config (item, value, editable, type)
 # stop services
 service mysql stop
 service apache2 stop
-

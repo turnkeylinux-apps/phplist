@@ -8,6 +8,7 @@ Option:
                 DEFAULT=www.example.com
 """
 
+import hashlib
 import re
 import sys
 import getopt
@@ -78,10 +79,10 @@ def main():
     inithooks_cache.write('APP_DOMAIN', domain)
 
     m = MySQL()
-    m.execute('UPDATE phplist.admin SET password=%s WHERE loginname=\"admin\";', (password,))
+    password_hash = hashlib.sha256(password.encode()).hexdigest()
+    m.execute('UPDATE phplist.admin SET password=%s WHERE loginname=\"admin\";', (password_hash,))
     m.execute('UPDATE phplist.admin SET email=%s WHERE loginname=\"admin\";', (email,))
     m.execute('UPDATE phplist.config SET value=%s WHERE item=\"website\";', (domain,))
 
 if __name__ == "__main__":
     main()
-
