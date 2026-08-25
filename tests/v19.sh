@@ -234,7 +234,7 @@ for package in php mariadb-server apache2 postfix cron; do
     test "$candidate" != '(none)'
     grep -Eq 'trixie|deb13' "$apt_policy"
 done
-after="$(dpkg-query -W -f='${Version}' php)|$(dpkg-query -W -f='${Version}' mariadb-server)|$(dpkg-query -W -f='${Version}' apache2)|$(dpkg-query -W -f='${Version}' postfix)|$(dpkg-query -W -f='${Version}' cron)"
+after="$(dpkg-query -W -f='${Version}' php8.4-cli)|$(dpkg-query -W -f='${Version}' mariadb-server)|$(dpkg-query -W -f='${Version}' apache2)|$(dpkg-query -W -f='${Version}' postfix)|$(dpkg-query -W -f='${Version}' cron)"
 test "$after" = "$before"
 grep -Rqs '^Suites: trixie' /etc/apt/sources.list.d
 ! grep -Rqi bookworm /etc/apt/sources.list.d
