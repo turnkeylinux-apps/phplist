@@ -6,3 +6,6 @@
 [ -e $INITHOOKS_CONF ] && . $INITHOOKS_CONF
 $INITHOOKS_PATH/bin/phplist.py --pass="$APP_PASS" --email="$APP_EMAIL" --domain="$APP_DOMAIN"
 
+# MySQL() stops the database after applying the firstboot values. Restore the
+# normal appliance service state before handing control back to inithooks.
+systemctl start mariadb.service

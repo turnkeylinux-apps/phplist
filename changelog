@@ -1,3 +1,19 @@
+turnkey-phplist-19.0 (1) turnkey; urgency=low
+
+  * Update phpList to v3.7.0 from the official upstream release and verify its
+    published SHA-256 digest.
+
+  * Adapt the appliance to Debian 13/Trixie and PHP 8.4. Use phpList's bundled
+    IMAP fallback because Debian no longer provides the legacy PHP IMAP
+    extension.
+
+  * Schedule command-line queue processing and add a supervised TurnKey
+    phpList update command.
+
+  * Upgrade the base distribution to Debian 13/Trixie.
+
+ -- Jeremy Davis <jeremy@turnkeylinux.org>  Tue, 25 Aug 2026 00:00:00 +0000
+
 turnkey-phplist-18.0 (1) turnkey; urgency=low
 
   * Update phpList to v3.6.14
@@ -289,4 +305,3 @@ turnkey-phplist-12.0 (1) turnkey; urgency=low
     appliances. Here we only describe changes specific to this appliance.
 
  -- Alon Swartz <alon@turnkeylinux.org>  Wed, 01 Aug 2012 08:00:00 +0200
-

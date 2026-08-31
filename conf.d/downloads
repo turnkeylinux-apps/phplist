@@ -1,14 +1,24 @@
 #!/bin/bash -ex
 
-dl() {
-    [ "$FAB_HTTP_PROXY" ] && PROXY="--proxy $FAB_HTTP_PROXY"
-    # -J|--remote-header-name forces curl to use the filename from the server
-    cd $2; curl -L -f -J -O $PROXY $1; cd -
-}
+VERSION=3.7.0
+ARCHIVE=phplist-$VERSION.zip
+CHECKSUM=phplist-$VERSION.sha256
+BASE_URL=https://downloads.sourceforge.net/project/phplist/phplist/$VERSION
+EXPECTED_SHA256=0b1c2eae6a7fd617d18438d97d47714b4cbfdf3e6b2abab8a154e17d28ec89de
 
-# Pull download link for latest version from downloads page
-URL=$(curl https://www.phplist.org/download-phplist/ \
-        | sed -En '\|Download ZIP|s|^.* href="(http[a-z0-9\.:/-]+)">.*$|\1|p')
+proxy_args=()
+if [ -n "${FAB_HTTP_PROXY:-}" ]; then
+    proxy_args=(--proxy "$FAB_HTTP_PROXY")
+fi
 
-dl $URL /usr/local/src
+cd /usr/local/src
+curl --fail --location --silent --show-error \
+    --proto '=https' --proto-redir '=https' \
+    "${proxy_args[@]}" --output "$ARCHIVE" "$BASE_URL/$ARCHIVE"
+curl --fail --location --silent --show-error \
+    --proto '=https' --proto-redir '=https' \
+    "${proxy_args[@]}" --output "$CHECKSUM" "$BASE_URL/$CHECKSUM"
 
+published=$(awk -v archive="$ARCHIVE" '$2 == archive { print $1 }' "$CHECKSUM")
+test "$published" = "$EXPECTED_SHA256"
+printf '%s  %s\n' "$EXPECTED_SHA256" "$ARCHIVE" | sha256sum --check -
